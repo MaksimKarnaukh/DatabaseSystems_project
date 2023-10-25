@@ -15,7 +15,7 @@ By default, we implemented all the five (sub)exercises in the jupyter notebook.
 
 Our first challenge to overcome, was to write fast functions to save and load the data with the binary file. 
 
-For the save to bunary file, We did this by using a lambda function on the dataframe which is quite fast, 
+For the save to binary file, We did this by using a lambda function on the dataframe which is quite fast, 
 compared to a regular for loop. We did a small benchmark and this is roughly 6 times faster. 
 
 For the load from binary file, we did a slightly different approach. 
