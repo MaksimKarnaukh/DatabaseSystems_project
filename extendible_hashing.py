@@ -23,6 +23,24 @@ class BucketValue(object):
         value_bytes = self.value
         return bytearray(key_bytes + value_bytes)
 
+    @classmethod
+    def from_bytes(cls, byte_data):
+        """
+        Reconstructs a BucketValue object from its byte representation.
+
+        :param byte_data: Byte representation of the BucketValue.
+        :return: Reconstructed BucketValue object.
+        """
+        key_bytes = byte_data[:4]
+        value_bytes = byte_data[4:]
+
+        # Convert key bytes to an integer and then to a binary string
+        key_integer = int.from_bytes(key_bytes, byteorder='big')
+        key_binary_string = bin(key_integer)[2:].zfill(32)
+
+        # Create and return the BucketValue object
+        return cls(key_binary_string, bytearray(value_bytes))
+
     def get_key(self):
         return self.key
 
@@ -80,7 +98,6 @@ class Bucket(object):
         max_size = int.from_bytes(byte_data[1:2], byteorder='big')
         bucket_id = int.from_bytes(byte_data[2:6], byteorder='big')
 
-        # Extract BucketValue instances from the remaining bytes
         bucket_values = []
         for i in range(6, len(byte_data), 20):
             key_bytes = byte_data[i:i + 4]
