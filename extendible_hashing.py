@@ -83,6 +83,7 @@ class Bucket(object):
 
 def hash_function_str(key) -> str:
     """Hashes a key and returns the hash value.
+    In this case, the key is converted to a binary string and padded to 32 bits.
     
     :return: The hash as a string
     """
@@ -117,6 +118,18 @@ class ExtendibleHashingIndex(object):
     def getBucket(self, keyHash: str) -> Union[Bucket, None]:
         clippedPrefix: str = get_hash_prefix(keyHash, self.globalHashPrefixSize)
         return self.bucketPointers.get(clippedPrefix, None)
+    
+    def get(self, key):
+        """
+        Returns the first item with the given key from the index.
+        :param key: non-hashed key
+        :return:
+        """
+        # first, get the bucket associated with the key
+        keyHash = self.get_hash_from_key(key=key)
+        bucket = self.getBucket(keyHash=keyHash)
+        # then, get the item from the bucket
+        return bucket.search(keyHash)
 
     def insert_bucket(self, bucket, clipped_prefix):
         """Inserts a key-value pair into the index."""
