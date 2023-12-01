@@ -305,6 +305,6 @@ if __name__ == "__main__":
             # bv = BucketValue(key=eh.get_hash_from_key(key=user_id), value=user_id)
             hashed_key = eh.get_hash_from_key(key=user_id)
             eh.insert_keyval(keyHash=hashed_key, value=user_id)
-    
-        for bucket in eh.bucketPointers.values():
-            print(str(bucket))
+
+#        for bucket in eh.bucketPointers.values():
+#            print(str(bucket))
