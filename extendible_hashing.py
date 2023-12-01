@@ -93,7 +93,6 @@ class Bucket(object):
     @classmethod
     def from_bytes(cls, byte_data):
 
-        # Extract values from the byte_data
         local_prefix_size = int.from_bytes(byte_data[0:1], byteorder='big')
         max_size = int.from_bytes(byte_data[1:2], byteorder='big')
         bucket_id = int.from_bytes(byte_data[2:6], byteorder='big')
