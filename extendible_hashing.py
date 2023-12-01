@@ -199,7 +199,7 @@ class ExtendibleHashingIndex(object):
         """
         bucket: Union[int, Bucket] = self.bucketPointers[prefix]
         if isinstance(bucket, int):
-            # TODO: read bucket
+            # TODO: read bucket!
             # TODO: if #bucketsInMem > maxBucketsInMem then swap one bucket
             bucket = self.read_bucket()
         return bucket
