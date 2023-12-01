@@ -9,6 +9,21 @@ class BucketValue(object):
     def __str__(self):
         return str(self.key) + " : " + str(self.value)
 
+    def __repr__(self):
+        return self.__str__()
+
+    def __bytes__(self):
+        """
+        Convert BucketValue to a byte string of length 20 bytes
+        :return: bytestring of length 20
+        """
+        # make a bytearray of key and value
+        key_integer = eval('0b' + self.key)
+        key_bytes = key_integer.to_bytes(4, byteorder='big')
+        value_bytes = self.value
+        return bytearray(key_bytes + value_bytes)
+
+
     def get_key(self):
         return self.key
 
@@ -33,6 +48,9 @@ class Bucket(object):
             result += "    " + str(elem) + '\n'
         result += ']'
         return result
+
+    def __repr__(self):
+        return self.__str__()
 
     def __len__(self):
         return len(self.list)
@@ -188,26 +206,20 @@ class ExtendibleHashingIndex(object):
         """Inserts a key-value pair into the index."""
         pass
 
-    def insert_keyval_into_bucket(self, bucket: Bucket, keyHash: str, value):
+    def insert_keyval(self, keyHash: str, value):
         """Inserts a key-value pair into the index."""
+        bucket: Bucket = self.getBucket(keyHash=keyHash)
         bucketValue: BucketValue = BucketValue(keyHash, value)
         success: bool = bucket.insert(bucketValue)
         # Bucket is full, split it
         if not success:
             self.split(bucket)
-        success: bool = bucket.insert(bucketValue)
-        assert (success is True, "After bucket split, insert MUST succeed")
-
-    def insert_keyval(self, keyHash, value):
-        """
-        Inserts a key-value pair into the index.
-
-        :param keyHash: hashed key
-        :param value:
-        :return:
-        """
-        bucket: Bucket = self.getBucket(keyHash=keyHash)
-        self.insert_keyval_into_bucket(bucket=bucket, keyHash=keyHash, value=value)
+            print(("\n" + "#"*20) * 3)
+            print(self)
+            # Split invalidated old bucket
+            bucket = self.getBucket(keyHash=keyHash)
+            success: bool = bucket.insert(bucketValue)
+        assert success is True, "After bucket split, insert MUST succeed"
 
     def delete(self, key):
         """
@@ -226,21 +238,28 @@ class ExtendibleHashingIndex(object):
         Perform any necessary actions after the split to
         bring the index into a valid state again.
 
+        IMPORTANT: This method invalidates the passed *bucket* reference
+
         :param bucket: The bucket to split
         """
         # TODO: \/ Buckets are stored in pages in memory???? \/
-        newBucketPointers: Dict[str: Bucket] = dict()
-        for oldPrefix, oldBucket in self.bucketPointers.items():
-            newPrefix0, newPrefix1 = self.get_extended_prefixes(oldPrefix)
-            newBucketPointers[newPrefix0] = oldBucket
-            newBucketPointers[newPrefix1] = oldBucket
-        self.bucketPointers = newBucketPointers
+        shouldIncreaseGlobal: bool = bucket.localPrefixSize == self.globalHashPrefixSize
+
+        if shouldIncreaseGlobal:
+            newBucketPointers: Dict[str: Union[Bucket, int]] = dict()
+            for oldPrefix, oldBucket in self.bucketPointers.items():
+                newPrefix0, newPrefix1 = self.get_extended_prefixes(oldPrefix)
+                newBucketPointers[newPrefix0] = oldBucket
+                newBucketPointers[newPrefix1] = oldBucket
+            self.bucketPointers = newBucketPointers
 
         res0, res1 = self.split_bucket(bucket)
         newBucket0, newBucketPrefix0 = res0
         newBucket1, newBucketPrefix1 = res1
         self.bucketPointers[newBucketPrefix0] = newBucket0
         self.bucketPointers[newBucketPrefix1] = newBucket1
+
+        self.globalHashPrefixSize += shouldIncreaseGlobal
         # TODO: /\ READ ABOVE /\
 
     def split_bucket(self, bucket: Bucket):
@@ -260,16 +279,18 @@ class ExtendibleHashingIndex(object):
 
         newPrefix0, newPrefix1 = self.get_extended_prefixes(bucketLocalPrefix)
 
-        new_bucket0 = Bucket(local_prefix_size=bucket.localPrefixSize + 1)
+        new_bucket0 = Bucket(local_prefix_size=bucket.localPrefixSize + 1, doIncrementID=False)
+        new_bucket0.bucketID = bucket.bucketID      # Do not waste unused ID
         new_bucket1 = Bucket(local_prefix_size=bucket.localPrefixSize + 1)
 
-        for i in range(len(bucketValues)):
-            keyHash = bucketValues[i].get_key()[: len(newPrefix0)]
+        for idx, bucketValueObj in enumerate(bucketValues):
+            bucketKey = bucketValueObj.get_key()
+            keyHash = bucketKey[: len(newPrefix0)]
 
             if newPrefix0 == keyHash:
-                new_bucket0.insert(BucketValue(key=keyHash, value=bucketValues[i].get_value()))
+                new_bucket0.insert(bucketValueObj)
             elif newPrefix1 == keyHash:
-                new_bucket1.insert(BucketValue(key=keyHash, value=bucketValues[i].get_value()))
+                new_bucket1.insert(bucketValueObj)
             else:
                 print("YOU SHOULDN'T EVER SEE THIS MESSAGE")
 
@@ -297,11 +318,14 @@ class ExtendibleHashingIndex(object):
 
 
 if __name__ == "__main__":
+    eh = ExtendibleHashingIndex()
 
+    if True:
+        import random
+        data_set = [i for i in range(30)] # list(range(30))
+        random.shuffle(data_set)
 
-    if True
-        eh = ExtendibleHashingIndex()
-        for user_id in range(10):
+        for user_id in data_set:
             # bv = BucketValue(key=eh.get_hash_from_key(key=user_id), value=user_id)
             hashed_key = eh.get_hash_from_key(key=user_id)
             eh.insert_keyval(keyHash=hashed_key, value=user_id)
