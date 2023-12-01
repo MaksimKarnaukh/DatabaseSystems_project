@@ -3,8 +3,8 @@ from typing import List, Tuple, Dict, Union, Callable
 
 class BucketValue(object):
     def __init__(self, key, value):
-        self.key = key
-        self.value = value
+        self.key: str = key
+        self.value: bytearray = value
 
     def __str__(self):
         return str(self.key) + " : " + str(self.value)
@@ -17,7 +17,9 @@ class BucketValue(object):
 
 
 class Bucket(object):
-    def __init__(self,local_prefix_size: int = 1, max_size: int = 2, bucket_values: List[BucketValue] = None):
+    amountBuckets = 0
+
+    def __init__(self, local_prefix_size: int = 1, max_size: int = 2, bucket_values: List[BucketValue] = None, doIncrementID: bool=True):
         self.localPrefixSize: int = local_prefix_size
         self.maxSize: int = max_size
 
@@ -33,6 +35,12 @@ class Bucket(object):
     def __len__(self):
         return len(self.list)
 
+    def __eq__(self, other):
+        return self.list == other.list
+
+    def __bytes__(self):
+         # make a bytearray of localPrefixSize, maxSize, bucketID, and then the bucketValues
+        pass
 
     def get_local_prefix_size(self) -> int:
         return self.localPrefixSize
