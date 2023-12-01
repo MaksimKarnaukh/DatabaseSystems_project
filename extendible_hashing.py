@@ -24,6 +24,8 @@ class Bucket(object):
         self.maxSize: int = max_size
 
         self.list: List[BucketValue] = [] if bucket_values is None else bucket_values
+        self.bucketID = Bucket.amountBuckets
+        Bucket.amountBuckets += doIncrementID
 
     def __str__(self):
         result = f"<local {self.localPrefixSize}, maxSize {self.maxSize}> [\n"
@@ -114,11 +116,54 @@ def get_hash_prefix(keyHash: str, prefixSize: int) -> str:
 class ExtendibleHashingIndex(object):
     def __init__(self):
 
-        self.bucketPointers: Dict[str: Bucket] = {
+        self.bucketPointers: Dict[str: Union[int, Bucket]] = {
             "0": Bucket(),
             "1": Bucket()
         }
         self.globalHashPrefixSize: int = 1
+
+        self.maxBucketInMemory: int = 6
+
+    def __str__(self):
+        reversedDict = dict()
+        bucketByID = dict()
+        for k, v in self.bucketPointers.items():
+            bucketByID[v.bucketID] = v
+            if v.bucketID in reversedDict.keys():
+                reversedDict[v.bucketID].append(k)
+            else:
+                reversedDict[v.bucketID] = [k]
+
+        printStr = ""
+        for k, v in reversedDict.items():
+            printStr += 'prefix: ' + ','.join(v) + '\n'
+            printStr += bucketByID[k].__str__() + '\n'
+
+        return printStr
+
+    def get_bucket(self, prefix: str):
+        """
+
+        :param prefix:
+        :return:
+        """
+        bucket: Union[int, Bucket] = self.bucketPointers[prefix]
+        if isinstance(bucket, int):
+            # TODO: read bucket
+            # TODO: if #bucketsInMem > maxBucketsInMem then swap one bucket
+            bucket = self.read_bucket()
+        return bucket
+
+    def set_bucket(self, prefix: str, bucket: Bucket):
+        """
+
+        :param prefix:
+        :param bucket:
+        :return:
+        """
+        # TODO: if #bucketsInMem > maxBucketsInMem then evict one bucket
+        # TODO: write bucket
+        self.bucketPointers[prefix] = bucket
 
     def get_hash_from_key(self, key, hash_function: Callable=hash_function_str):
         return hash_function(key)
@@ -239,6 +284,16 @@ class ExtendibleHashingIndex(object):
         )
         """
         return prefix + '0', prefix + '1'
+
+    def read_bucket(self, bucketID):
+        bucketFixedSize: int = 50
+        with open("f", "rb") as f:
+            f.seek(bucketFixedSize * bucketID)
+            bucketBytes = f.read(bucketFixedSize)
+        pass
+
+    def write_bucket(self):
+        pass
 
 
 if __name__ == "__main__":
