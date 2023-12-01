@@ -1,4 +1,4 @@
-from typing import List, Union, Callable
+from typing import List, Tuple, Dict, Union, Callable
 
 
 class BucketValue(object):
@@ -106,7 +106,7 @@ def get_hash_prefix(keyHash: str, prefixSize: int) -> str:
 class ExtendibleHashingIndex(object):
     def __init__(self):
 
-        self.bucketPointers: dict[int: Bucket] = {
+        self.bucketPointers: Dict[str: Bucket] = {
             "0": Bucket(),
             "1": Bucket()
         }
@@ -141,7 +141,7 @@ class ExtendibleHashingIndex(object):
         success: bool = bucket.insert(bucketValue)
         # Bucket is full, split it
         if not success:
-            self.split(bucket, keyHash)
+            self.split(bucket)
         success: bool = bucket.insert(bucketValue)
         assert (success is True, "After bucket split, insert MUST succeed")
 
@@ -168,22 +168,27 @@ class ExtendibleHashingIndex(object):
         # then, delete the item from the bucket
         return bucket.delete(keyHash)
 
-    def split(self, bucket: Bucket, keyHash: str) -> None:
+    def split(self, bucket: Bucket) -> None:
         """Perfom a split on the index for a given bucket.
         Perform any necessary actions after the split to
         bring the index into a valid state again.
 
         :param bucket: The bucket to split
         """
-        keyHashPrefix: str = get_hash_prefix(keyHash=keyHash, prefixSize=self.globalHashPrefixSize)
+        # TODO: \/ Buckets are stored in pages in memory???? \/
+        newBucketPointers: Dict[str: Bucket] = dict()
+        for oldPrefix, oldBucket in self.bucketPointers.items():
+            newPrefix0, newPrefix1 = self.get_extended_prefixes(oldPrefix)
+            newBucketPointers[newPrefix0] = oldBucket
+            newBucketPointers[newPrefix1] = oldBucket
+        self.bucketPointers = newBucketPointers
 
         res0, res1 = self.split_bucket(bucket)
         newBucket0, newBucketPrefix0 = res0
         newBucket1, newBucketPrefix1 = res1
-
-        # TODO: replace old bucket
-
-        # TODO: fix pointers
+        self.bucketPointers[newBucketPrefix0] = newBucket0
+        self.bucketPointers[newBucketPrefix1] = newBucket1
+        # TODO: /\ READ ABOVE /\
 
     def split_bucket(self, bucket: Bucket):
         """Create two new buckets based on an "old" bucket.
@@ -200,8 +205,7 @@ class ExtendibleHashingIndex(object):
         randomBucketHash = bucketValues[0].get_key()
         bucketLocalPrefix = get_hash_prefix(randomBucketHash, bucket.localPrefixSize)
 
-        newPrefix0 = bucketLocalPrefix + '0'
-        newPrefix1 = bucketLocalPrefix + '1'
+        newPrefix0, newPrefix1 = self.get_extended_prefixes(bucketLocalPrefix)
 
         new_bucket0 = Bucket(local_prefix_size=bucket.localPrefixSize + 1)
         new_bucket1 = Bucket(local_prefix_size=bucket.localPrefixSize + 1)
@@ -218,13 +222,26 @@ class ExtendibleHashingIndex(object):
 
         return [new_bucket0, newPrefix0], [new_bucket1, newPrefix1]
 
+    def get_extended_prefixes(self, prefix: str) -> Tuple[str, str]:
+        """Convert the prefix into two extended prefixes of one 'bit' longer.
+
+        :return: (
+            prefix | '0',
+            prefix | '1'
+        )
+        """
+        return prefix + '0', prefix + '1'
+
 
 if __name__ == "__main__":
-    eh = ExtendibleHashingIndex()
-    for user_id in range(10):
-        # bv = BucketValue(key=eh.get_hash_from_key(key=user_id), value=user_id)
-        hashed_key = eh.get_hash_from_key(key=user_id)
-        eh.insert_keyval(keyHash=hashed_key, value=user_id)
 
-    for bucket in eh.bucketPointers.values():
-        print(str(bucket))
+
+    if True
+        eh = ExtendibleHashingIndex()
+        for user_id in range(10):
+            # bv = BucketValue(key=eh.get_hash_from_key(key=user_id), value=user_id)
+            hashed_key = eh.get_hash_from_key(key=user_id)
+            eh.insert_keyval(keyHash=hashed_key, value=user_id)
+    
+        for bucket in eh.bucketPointers.values():
+            print(str(bucket))
