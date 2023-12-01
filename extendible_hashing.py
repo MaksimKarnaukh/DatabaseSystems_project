@@ -23,7 +23,6 @@ class BucketValue(object):
         value_bytes = self.value
         return bytearray(key_bytes + value_bytes)
 
-
     def get_key(self):
         return self.key
 
@@ -34,13 +33,17 @@ class BucketValue(object):
 class Bucket(object):
     amountBuckets = 0
 
-    def __init__(self, local_prefix_size: int = 1, max_size: int = 2, bucket_values: List[BucketValue] = None, doIncrementID: bool=True):
+    def __init__(self, local_prefix_size: int = 1, max_size: int = 2, bucket_values: List[BucketValue] = None, doIncrementID: bool=True, manual_id: int = -1):
         self.localPrefixSize: int = local_prefix_size
         self.maxSize: int = max_size
 
         self.list: List[BucketValue] = [] if bucket_values is None else bucket_values
-        self.bucketID = Bucket.amountBuckets
-        Bucket.amountBuckets += doIncrementID
+
+        if manual_id != -1:
+            self.bucketID = manual_id
+        else:
+            self.bucketID = Bucket.amountBuckets
+            Bucket.amountBuckets += doIncrementID
 
     def __str__(self):
         result = f"<local {self.localPrefixSize}, maxSize {self.maxSize}> [\n"
@@ -59,8 +62,37 @@ class Bucket(object):
         return self.list == other.list
 
     def __bytes__(self):
-         # make a bytearray of localPrefixSize, maxSize, bucketID, and then the bucketValues
-        pass
+        # make a bytearray of localPrefixSize, maxSize, bucketID, and then the bucketValues.
+        # in total this is: 1+1+4+10*20 = 206 bytes for one bucket
+        local_prefix_size_bytes = self.localPrefixSize.to_bytes(1, byteorder='big')  # never a value > 32
+        max_size_bytes = self.maxSize.to_bytes(1, byteorder='big')  # never a value > 255
+        bucket_id_bytes = self.bucketID.to_bytes(4, byteorder='big')  # max 2^32 buckets
+        bucket_values_bytes: bytearray = bytearray()
+        for bucket_value in self.list:
+            bucket_values_bytes += bytes(bucket_value)
+        return bytearray(local_prefix_size_bytes + max_size_bytes + bucket_id_bytes + bucket_values_bytes)
+
+    @classmethod
+    def from_bytes(cls, byte_data):
+
+        # Extract values from the byte_data
+        local_prefix_size = int.from_bytes(byte_data[0:1], byteorder='big')
+        max_size = int.from_bytes(byte_data[1:2], byteorder='big')
+        bucket_id = int.from_bytes(byte_data[2:6], byteorder='big')
+
+        # Extract BucketValue instances from the remaining bytes
+        bucket_values = []
+        for i in range(6, len(byte_data), 20):
+            key_bytes = byte_data[i:i + 4]
+            value_bytes = byte_data[i + 4:i + 20]
+
+            key = bin(int.from_bytes(key_bytes, byteorder='big'))[2:].zfill(32)
+            value = bytearray(value_bytes)
+
+            bucket_values.append(BucketValue(key, value))
+
+        # Create and return the Bucket object
+        return cls(local_prefix_size, max_size, bucket_values, doIncrementID=False, manual_id=bucket_id)
 
     def get_local_prefix_size(self) -> int:
         return self.localPrefixSize
@@ -109,10 +141,10 @@ class Bucket(object):
         return None
 
 
-def hash_function_str(key) -> str:
+def hash_function_str(key: int) -> str:
     """Hashes a key and returns the hash value.
     In this case, the key is converted to a binary string and padded to 32 bits.
-    
+
     :return: The hash as a string
     """
     binary_string = bin(key)[2:]
@@ -307,14 +339,33 @@ class ExtendibleHashingIndex(object):
         return prefix + '0', prefix + '1'
 
     def read_bucket(self, bucketID):
-        bucketFixedSize: int = 50
+        bucketFixedSize: int = 206
         with open("f", "rb") as f:
             f.seek(bucketFixedSize * bucketID)
             bucketBytes = f.read(bucketFixedSize)
         pass
 
-    def write_bucket(self):
-        pass
+    def write_bucket(self, bucket: Bucket):
+        """
+        Write the bytes of the bucket to a file.
+        :param bucket: bucket object
+        :return:
+        """
+        bucket_record_size = 206
+
+        with open("buckets_data.dat", "ab+") as file:
+            bucket_bytes = bytes(bucket)
+
+            if len(bucket_bytes) > bucket_record_size:
+                raise ValueError("Bucket data size exceeds the specified record size.")
+
+            # If the bucket data is smaller than the record size, pad it with zeros
+            padded_bucket_bytes = bucket_bytes + bytes([0] * (bucket_record_size - len(bucket_bytes)))
+
+            assert len(padded_bucket_bytes) == 206
+
+            file.seek(bucket_record_size * 8 * bucket.bucketID)
+            file.write(padded_bucket_bytes)
 
 
 if __name__ == "__main__":
