@@ -92,6 +92,7 @@ def hash_function_str(key) -> str:
     result = padded_binary_string[::-1]
     return result
 
+
 def get_hash_prefix(keyHash: str, prefixSize: int) -> str:
     """Determine the key hash prefix.
     
@@ -110,12 +111,11 @@ class ExtendibleHashingIndex(object):
         }
         self.globalHashPrefixSize: int = 1
 
-
     def get_hash_from_key(self, key, hash_function: Callable=hash_function_str):
         return hash_function(key)
 
     def getBucket(self, keyHash: str) -> Union[Bucket, None]:
-        clippedPrefix: int = get_hash_prefix(keyHash, self.globalHashPrefixSize)
+        clippedPrefix: str = get_hash_prefix(keyHash, self.globalHashPrefixSize)
         return self.bucketPointers.get(clippedPrefix, None)
 
     def insert_bucket(self, bucket, clipped_prefix):
@@ -145,10 +145,16 @@ class ExtendibleHashingIndex(object):
         self.insert_keyval_into_bucket(bucket=bucket, key=keyHash, value=value)
 
     def delete(self, key):
-        pass
-
-    def search(self, key):
-        pass
+        """
+        Deletes the first item with the given key from the index.
+        :param key: non-hashed key
+        :return:
+        """
+        # first, get the bucket associated with the key
+        keyHash = self.get_hash_from_key(key)
+        bucket = self.getBucket(keyHash=keyHash)
+        # then, delete the item from the bucket
+        return bucket.delete(keyHash)
 
     def split(self, bucket: Bucket):
 
