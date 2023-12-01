@@ -116,7 +116,7 @@ class ExtendibleHashingIndex(object):
         return hash_function(key)
 
     def getBucket(self, keyHash: str) -> Union[Bucket, None]:
-        clippedPrefix: str = get_hash_prefix(keyHash, self.globalHashPrefixSize)
+        clippedPrefix: str = get_hash_prefix(keyHash=keyHash, prefixSize=self.globalHashPrefixSize)
         return self.bucketPointers.get(clippedPrefix, None)
     
     def get(self, key):
@@ -131,7 +131,7 @@ class ExtendibleHashingIndex(object):
         # then, get the item from the bucket
         return bucket.search(keyHash)
 
-    def insert_bucket(self, bucket, clipped_prefix):
+    def insert_bucket(self, bucket: Bucket, clipped_prefix: str):
         """Inserts a key-value pair into the index."""
         pass
 
@@ -163,7 +163,7 @@ class ExtendibleHashingIndex(object):
         :return:
         """
         # first, get the bucket associated with the key
-        keyHash = self.get_hash_from_key(key)
+        keyHash = self.get_hash_from_key(key=key)
         bucket = self.getBucket(keyHash=keyHash)
         # then, delete the item from the bucket
         return bucket.delete(keyHash)
