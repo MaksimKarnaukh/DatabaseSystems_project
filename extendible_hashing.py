@@ -122,14 +122,15 @@ class ExtendibleHashingIndex(object):
         """Inserts a key-value pair into the index."""
         pass
 
-    def insert_keyval_into_bucket(self, bucket: Bucket, key, value):
+    def insert_keyval_into_bucket(self, bucket: Bucket, keyHash: str, value):
         """Inserts a key-value pair into the index."""
-        success: bool = bucket.insert(BucketValue(key, value))
+        bucketValue: BucketValue = BucketValue(keyHash, value)
+        success: bool = bucket.insert(bucketValue)
+        # Bucket is full, split it
         if not success:
-            # Bucket is full, split it
-            new_bucket1, new_bucket2 = self.split(bucket)
-            self.insert_bucket(*new_bucket1)
-            self.insert_bucket(*new_bucket2)
+            self.split(bucket, keyHash)
+        success: bool = bucket.insert(bucketValue)
+        assert (success is True, "After bucket split, insert MUST succeed")
 
     def insert_keyval(self, keyHash, value):
         """
@@ -139,10 +140,8 @@ class ExtendibleHashingIndex(object):
         :param value:
         :return:
         """
-        if value == 1:
-            a = 2
         bucket: Bucket = self.getBucket(keyHash=keyHash)
-        self.insert_keyval_into_bucket(bucket=bucket, key=keyHash, value=value)
+        self.insert_keyval_into_bucket(bucket=bucket, keyHash=keyHash, value=value)
 
     def delete(self, key):
         """
@@ -156,30 +155,55 @@ class ExtendibleHashingIndex(object):
         # then, delete the item from the bucket
         return bucket.delete(keyHash)
 
-    def split(self, bucket: Bucket):
+    def split(self, bucket: Bucket, keyHash: str) -> None:
+        """Perfom a split on the index for a given bucket.
+        Perform any necessary actions after the split to
+        bring the index into a valid state again.
+
+        :param bucket: The bucket to split
+        """
+        keyHashPrefix: str = get_hash_prefix(keyHash=keyHash, prefixSize=self.globalHashPrefixSize)
+
+        res0, res1 = self.split_bucket(bucket)
+        newBucket0, newBucketPrefix0 = res0
+        newBucket1, newBucketPrefix1 = res1
+
+        # TODO: replace old bucket
+
+        # TODO: fix pointers
+
+    def split_bucket(self, bucket: Bucket):
+        """Create two new buckets based on an "old" bucket.
+        The two new buckets contain the bucket values of
+        the old bucket. The old bucket is untouched.
+
+        :return: (
+            [ newBucket0, newPrefix0 ],
+            [ newBucket1, newPrefix1 ],
+        )
+        """
 
         bucketValues = bucket.get_bucket_values()
         randomBucketHash = bucketValues[0].get_key()
-        # clipped_prefix = randomBucketHash[:bucket.localPrefixSize]
-        clipped_prefix = get_hash_prefix(randomBucketHash, bucket.localPrefixSize)
+        bucketLocalPrefix = get_hash_prefix(randomBucketHash, bucket.localPrefixSize)
 
-        b1 = clipped_prefix + '0'
-        b2 = clipped_prefix + '1'
+        newPrefix0 = bucketLocalPrefix + '0'
+        newPrefix1 = bucketLocalPrefix + '1'
 
+        new_bucket0 = Bucket(local_prefix_size=bucket.localPrefixSize + 1)
         new_bucket1 = Bucket(local_prefix_size=bucket.localPrefixSize + 1)
-        new_bucket2 = Bucket(local_prefix_size=bucket.localPrefixSize + 1)
 
         for i in range(len(bucketValues)):
-            keyHash = bucketValues[i].get_key()[: len(b1)]
+            keyHash = bucketValues[i].get_key()[: len(newPrefix0)]
 
-            if b1 == keyHash:
+            if newPrefix0 == keyHash:
+                new_bucket0.insert(BucketValue(key=keyHash, value=bucketValues[i].get_value()))
+            elif newPrefix1 == keyHash:
                 new_bucket1.insert(BucketValue(key=keyHash, value=bucketValues[i].get_value()))
-            elif b2 == keyHash:
-                new_bucket2.insert(BucketValue(key=keyHash, value=bucketValues[i].get_value()))
             else:
                 print("YOU SHOULDN'T EVER SEE THIS MESSAGE")
 
-        return [new_bucket1, b1], [new_bucket2, b2]
+        return [new_bucket0, newPrefix0], [new_bucket1, newPrefix1]
 
 
 if __name__ == "__main__":
