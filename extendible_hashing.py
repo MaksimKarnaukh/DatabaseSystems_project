@@ -34,7 +34,7 @@ class BucketValue(object):
 class Bucket(object):
     amountBuckets = 0
 
-    def __init__(self, local_prefix_size: int = 1, max_size: int = 2, bucket_values: List[BucketValue] = None, doIncrementID: bool=True):
+    def __init__(self, local_prefix_size: int = 1, max_size: int = 10, bucket_values: List[BucketValue] = None, doIncrementID: bool=True):
         self.localPrefixSize: int = local_prefix_size
         self.maxSize: int = max_size
 
@@ -211,15 +211,13 @@ class ExtendibleHashingIndex(object):
         bucket: Bucket = self.getBucket(keyHash=keyHash)
         bucketValue: BucketValue = BucketValue(keyHash, value)
         success: bool = bucket.insert(bucketValue)
+
         # Bucket is full, split it
         if not success:
             self.split(bucket)
-            print(("\n" + "#"*20) * 3)
-            print(self)
-            # Split invalidated old bucket
-            bucket = self.getBucket(keyHash=keyHash)
-            success: bool = bucket.insert(bucketValue)
-        assert success is True, "After bucket split, insert MUST succeed"
+
+            # insert recursively (for in the case that the destination bucket is still full)
+            self.insert_keyval(keyHash, value)
 
     def delete(self, key):
         """
@@ -256,11 +254,15 @@ class ExtendibleHashingIndex(object):
         res0, res1 = self.split_bucket(bucket)
         newBucket0, newBucketPrefix0 = res0
         newBucket1, newBucketPrefix1 = res1
-        self.bucketPointers[newBucketPrefix0] = newBucket0
-        self.bucketPointers[newBucketPrefix1] = newBucket1
+
+        # because we did a split, we need to update all related pointers
+        for ptr in self.bucketPointers.keys():
+            if ptr.startswith(newBucketPrefix0):
+                self.bucketPointers[ptr] = newBucket0
+            elif ptr.startswith(newBucketPrefix1):
+                self.bucketPointers[ptr] = newBucket1
 
         self.globalHashPrefixSize += shouldIncreaseGlobal
-        # TODO: /\ READ ABOVE /\
 
     def split_bucket(self, bucket: Bucket):
         """Create two new buckets based on an "old" bucket.
@@ -316,19 +318,53 @@ class ExtendibleHashingIndex(object):
     def write_bucket(self):
         pass
 
+    def getViolations(self, exitOnViolation: bool=True) -> list:
+        """Check whether the ExtendibleHashingIndex is valid.
+
+        :return: A list of all violations
+        """
+        violations = []
+        for prefix, bucket in self.bucketPointers.items():
+            # A prefix is of the correct size
+            isLenCorrect = len(prefix) == self.globalHashPrefixSize
+            if not isLenCorrect:
+                violations.append(f"bad prefix length: found {len(prefix)}, expected {self.globalHashPrefixSize}")
+                if exitOnViolation:
+                    return violations
+
+            element: BucketValue
+            for element in bucket.list:
+                if not element.key.startswith(prefix[0:bucket.localPrefixSize]):
+                    violations.append(f"incorrect prefix: {prefix[0:bucket.localPrefixSize]} for bucket element: {element.key} with bucket localPrefixSize = {bucket.localPrefixSize}")
+                    if exitOnViolation:
+                        return violations
+
+        return violations
+
+    def isValid(self) -> bool:
+        """Check whether the ExtendibleHashingIndex is valid.
+
+        :return: Validity boolean
+        """
+        return len(self.getViolations(False)) == 0
+
+
 
 if __name__ == "__main__":
     eh = ExtendibleHashingIndex()
 
     if True:
         import random
-        data_set = [i for i in range(30)] # list(range(30))
+        data_set = [i for i in range(10000)] # list(range(30))
         random.shuffle(data_set)
 
+        # insert 10000 entries in a random order
         for user_id in data_set:
-            # bv = BucketValue(key=eh.get_hash_from_key(key=user_id), value=user_id)
             hashed_key = eh.get_hash_from_key(key=user_id)
             eh.insert_keyval(keyHash=hashed_key, value=user_id)
 
-#        for bucket in eh.bucketPointers.values():
-#            print(str(bucket))
+        # TESTING
+        print(eh)
+        print(eh.isValid())
+        print(eh.getViolations(False))
+
