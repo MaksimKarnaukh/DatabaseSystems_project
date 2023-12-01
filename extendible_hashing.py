@@ -360,7 +360,9 @@ class ExtendibleHashingIndex(object):
         with open("f", "rb") as f:
             f.seek(bucketFixedSize * bucketID)
             bucketBytes = f.read(bucketFixedSize)
-        pass
+            
+            b = Bucket.from_bytes(bucketBytes)
+
 
     def write_bucket(self, bucket: Bucket):
         """
@@ -370,7 +372,7 @@ class ExtendibleHashingIndex(object):
         """
         bucket_record_size = 206
 
-        with open("buckets_data.dat", "ab+") as file:
+        with open("buckets_data.dat", "rb+") as file:
             bucket_bytes = bytes(bucket)
 
             if len(bucket_bytes) > bucket_record_size:
@@ -379,9 +381,9 @@ class ExtendibleHashingIndex(object):
             # If the bucket data is smaller than the record size, pad it with zeros
             padded_bucket_bytes = bucket_bytes + bytes([0] * (bucket_record_size - len(bucket_bytes)))
 
-            assert len(padded_bucket_bytes) == 206
+            assert len(padded_bucket_bytes) == bucket_record_size
 
-            file.seek(bucket_record_size * 8 * bucket.bucketID)
+            file.seek(bucket_record_size * bucket.bucketID)
             file.write(padded_bucket_bytes)
 
 
