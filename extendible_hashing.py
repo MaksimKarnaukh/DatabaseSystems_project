@@ -593,6 +593,8 @@ if __name__ == "__main__":
         print(eh)
         print(eh.isValid())
         print(eh.getViolations(False))
-        print(len(eh.bucketPointers.keys()))
-        print(sum([len(b.list) for _, b in eh.bucketPointers.items()]))
+        print(len(eh.bucketPointers.keys()), "  (unique #prefixes)")
+        print(len(set([b.bucketID for b in eh.bucketPointers.values()])), "  (unique #buckets)")
+        print(max([b.bucketID for b in eh.bucketPointers.values()]), "  (largest Bucket ID)")
+        print(sum([len(b.list) for _, b in eh.bucketPointers.items()]), " (total bucket items)")
 
