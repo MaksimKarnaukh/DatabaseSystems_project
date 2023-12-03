@@ -427,6 +427,8 @@ class ExtendibleHashingIndex(object):
         # TODO: \/ Buckets are stored in pages in memory???? \/
         shouldIncreaseGlobal: bool = bucket.localPrefixSize == self.globalHashPrefixSize
 
+        # if the global prefix length is smaller than the prefix length after a split, then we need to
+        # update the global prefix length and increase its length with 1, for each entry.
         if shouldIncreaseGlobal:
             newBucketPointers: Dict[str: Union[Bucket, int]] = dict()
             for oldPrefix, oldBucket in self.bucketPointers.items():
