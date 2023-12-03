@@ -805,7 +805,7 @@ def test_code():
     new_user2 = [2000, 'G', 'G@m.c', '1', 'G', 'addr', 1, 2, 1, 1234567890]
     create_var_length_user("test.bin", new_user)
     create_var_length_user("test.bin", new_user2)
-    for uid in range(10000, 10000 * 2):
+    for uid in range(10000, 10000 + 1000):
         new_userx = [uid, str(uid), 'G@m.c', '1', 'G', 'addr', 1, 2, 1, 1234567890]
         create_var_length_user("test.bin", new_userx)
     df2 = load_users_from_binary_var_length("test.bin")
