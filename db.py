@@ -2,6 +2,8 @@
 
 import pandas as pd
 from IPython.display import display
+from extendible_hashing import ExtendibleHashingIndex, BucketValue
+from typing import Union
 import copy
 
 df = pd.DataFrame(
@@ -39,7 +41,7 @@ OFFSET_SIZE: int = 2
 # user tuple is stored padded to 8B and the slot_address
 # padded to 8B, which is the offset within the page to
 # the slot corresponding to the user tuple.
-user_index = dict()
+user_index: ExtendibleHashingIndex = ExtendibleHashingIndex()
 remaining_page_mem_index = dict()
 
 
@@ -330,7 +332,8 @@ class Page:
             user_id_int: int = int.from_bytes(user_id_bytes, 'little')
             # Slot addresses may be shorter than the space allocated to them in the index
             padded_updated_slot_address: bytes = updated_slot_address.to_bytes(8, byteorder='little')
-            user_index[user_id_int] = page_number.to_bytes(8, byteorder='little') + padded_updated_slot_address
+            user_index.insert_keyval(user_id_int, page_number.to_bytes(8, byteorder='little') + padded_updated_slot_address)
+            # user_index[user_id_int] = page_number.to_bytes(8, byteorder='little') + padded_updated_slot_address
 
         # Shift tuples to eliminate fragmentation due to single tuple delete
         data_shift_address: int = last_tuple_address + del_tuple_size
@@ -341,7 +344,8 @@ class Page:
         self.set_tuple_count(initial_tuple_count - 1)
 
         # update user index
-        del user_index[user_id]
+        user_index.delete(user_id)
+        # del user_index[user_id]
 
         freed_memory: int = self.slot_size + del_tuple_size
         remaining_page_mem_index[page_number] = remaining_page_mem_index.get(page_number, 0) + freed_memory
@@ -396,7 +400,8 @@ def save_users_to_binary_var_length(filename, df):
         new_offset_address: int = page.append_tuple(user)
 
         # add key = user id, value = page number and offset of user in that page to bplustree
-        user_index[row['id']] = (len(pages) - 1).to_bytes(8, byteorder='little') + new_offset_address.to_bytes(8, byteorder='little')
+        user_index.insert_keyval(row['id'], (len(pages) - 1).to_bytes(8, byteorder='little') + new_offset_address.to_bytes(8, byteorder='little'))
+        # user_index[row['id']] = (len(pages) - 1).to_bytes(8, byteorder='little') + new_offset_address.to_bytes(8, byteorder='little')
 
     # note how much free space there is left per page
     for idx, p in enumerate(pages):
@@ -465,7 +470,11 @@ def read_var_length_user(db_filename: str, user_id: int):
     :param user_index: bplustree index
     :return: The user data
     """
-    tuple_location: bytes = user_index.get(user_id)
+    tuple_location: bytes = bytes()
+    found: Union[BucketValue, None] = user_index.get(user_id)
+    if found is not None:
+        tuple_location = found.value
+
     if tuple_location is None or len(tuple_location) == 0:
         return None
     page, offset_ptr = int.from_bytes(tuple_location[0:8], 'little'), int.from_bytes(tuple_location[8:16], 'little')
@@ -555,7 +564,8 @@ def create_var_length_user(db_filename: str, user_tuple):
         new_offset_address: int = page.append_tuple(encoded_user_tuple)
 
         # add page and user offset to user index
-        user_index[user_id] = page_number.to_bytes(8, 'little') + new_offset_address.to_bytes(8, 'little')
+        user_index.insert_keyval(user_id, page_number.to_bytes(8, 'little') + new_offset_address.to_bytes(8, 'little'))
+        # user_index[user_id] = page_number.to_bytes(8, 'little') + new_offset_address.to_bytes(8, 'little')
 
         # write page to binary file
         f.seek(page_number * PAGE_SIZE)
@@ -573,7 +583,13 @@ def delete_var_length_user(db_filename: str, user_id):
     :param user_id: The id column value for the user' db row
     """
     # Perform index lookup
-    tuple_location: bytes = user_index.get(user_id)
+    # tuple_location: bytes = user_index.get(user_id)
+
+    tuple_location: bytes = bytes()
+    found: Union[BucketValue, None] = user_index.get(user_id)
+    if found is not None:
+        tuple_location = found.value
+
     if tuple_location is None or len(tuple_location) == 0:
         return None
     page_number: int = int.from_bytes(tuple_location[0:8], 'little')
@@ -602,7 +618,13 @@ def update_var_length_user(db_filename: str, user_id, updated_user_tuple):
     :return:
     """
     # Perform index lookup
-    tuple_location: bytes = user_index.get(user_id)
+    # tuple_location: bytes = user_index.get(user_id)
+
+    tuple_location: bytes = bytes()
+    found: Union[BucketValue, None] = user_index.get(user_id)
+    if found is not None:
+        tuple_location = found.value
+
     if tuple_location is None or len(tuple_location) == 0:
         return None
     page_number: int = int.from_bytes(tuple_location[0:8], 'little')
@@ -660,7 +682,8 @@ def update_var_length_user(db_filename: str, user_id, updated_user_tuple):
         new_offset_address: int = page.append_tuple(encoded_updated_user_tuple)
 
         # add page and user offset to user index
-        user_index[user_id] = final_page_number.to_bytes(8, 'little') + new_offset_address.to_bytes(8, 'little')
+        user_index.insert_keyval(user_id, final_page_number.to_bytes(8, 'little') + new_offset_address.to_bytes(8, 'little'))
+        # user_index[user_id] = final_page_number.to_bytes(8, 'little') + new_offset_address.to_bytes(8, 'little')
 
         # update remaining page mem index
         remaining_page_mem_index[final_page_number] -= updated_user_tuple_size + OFFSET_SIZE
@@ -739,7 +762,7 @@ def test_code():
 
     #Read 4 random users
     print("------ BEFORE DELETE ------")
-    random_ids = [1, 2, 3, 4, 5]
+    random_ids = [1, 2, 3, 4, 5] + list(range(97 + 5, 97 + 26))
     random_users = []
     for id in random_ids:
         user_i = read_var_length_user("test.bin", id)
@@ -782,6 +805,9 @@ def test_code():
     new_user2 = [2000, 'G', 'G@m.c', '1', 'G', 'addr', 1, 2, 1, 1234567890]
     create_var_length_user("test.bin", new_user)
     create_var_length_user("test.bin", new_user2)
+    for uid in range(10000, 10000 * 2):
+        new_userx = [uid, str(uid), 'G@m.c', '1', 'G', 'addr', 1, 2, 1, 1234567890]
+        create_var_length_user("test.bin", new_userx)
     df2 = load_users_from_binary_var_length("test.bin")
     display(df2)
 

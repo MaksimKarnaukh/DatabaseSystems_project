@@ -209,10 +209,17 @@ class Bucket(object):
     def insert(self, value: BucketValue) -> bool:
         """
         Inserts a value of type BucketValue into the bucket.
+        Replaces the BucketValue's value if the key already exists
+        in this Bucket.
 
         :param value: value to insert
         :return: True if the value was inserted, False otherwise
         """
+        found = self.search(value.key)
+        if found is not None:
+            found.value = value.value
+            return True
+
         if len(self.list) < self.maxSize:
             self.list.append(value)
             return True
@@ -385,7 +392,7 @@ class ExtendibleHashingIndex(object):
 
         self.bucketPointers[prefix] = bucketWrapper
 
-    def get_hash_from_key(self, key: str, hash_function: Callable=hash_function_str):
+    def get_hash_from_key(self, key: int, hash_function: Callable=hash_function_str):
         """Transform the given key into a hash.
 
         :param key: The key to hash
@@ -416,8 +423,9 @@ class ExtendibleHashingIndex(object):
         # then, get the item from the bucket
         return bucket.search(keyHash)
 
-    def insert_keyval(self, keyHash: str, value):
+    def insert_keyval(self, key: int, value: bytes):
         """Inserts a key-value pair into the index."""
+        keyHash: str = self.get_hash_from_key(key=key)
         prefix: str = self.get_prefix_from_key_hash(keyHash=keyHash)
         bucket, bucketWrapper = self.get_bucket(prefix=prefix)
         bucketValue: BucketValue = BucketValue(keyHash, value)
@@ -428,7 +436,7 @@ class ExtendibleHashingIndex(object):
             self.split(bucketWrapper)
 
             # insert recursively (for in the case that the destination bucket is still full)
-            self.insert_keyval(keyHash, value)
+            self.insert_keyval(key, value)
 
     def delete(self, key):
         """
@@ -621,13 +629,13 @@ if __name__ == "__main__":
     if False:
         key, value = 0, bytes([12] * BucketValue.get_env_bucketvalue_value_size())
         hashed_key = eh.get_hash_from_key(key=key)
-        eh.insert_keyval(keyHash=hashed_key, value=value)
+        eh.insert_keyval(hashed_key, value=value)
 
         b0_prefix: str = "0"
         b0: Bucket = eh.bucketPointers[b0_prefix]
 
-        eh.insert_keyval(keyHash=hash_function_str(2), value=bytes([22] * BucketValue.get_env_bucketvalue_value_size()))
-        eh.insert_keyval(keyHash=hash_function_str(4), value=bytes([44] * BucketValue.get_env_bucketvalue_value_size()))
+        eh.insert_keyval(hash_function_str(2), value=bytes([22] * BucketValue.get_env_bucketvalue_value_size()))
+        eh.insert_keyval(hash_function_str(4), value=bytes([44] * BucketValue.get_env_bucketvalue_value_size()))
 
         print(b0)
         print([int.from_bytes(v, 'big') for v in b0.get_bucket_values()])
@@ -650,8 +658,7 @@ if __name__ == "__main__":
         # insert 10000 entries in a random order
         for user_id in data_set:
             value = user_id.to_bytes(BucketValue.get_env_bucketvalue_value_size(), 'big')
-            hashed_key = eh.get_hash_from_key(key=user_id)
-            eh.insert_keyval(keyHash=hashed_key, value=value)
+            eh.insert_keyval(key=user_id, value=value)
 
         # TESTING
         print(eh)
