@@ -131,7 +131,6 @@ class Bucket(object):
         # in total this is: 1+1+1+4+10*20 = 207 bytes for one bucket
         local_prefix_size_bytes = self.localPrefixSize.to_bytes(1, byteorder='big')  # never a value > 32
         max_size_bytes = self.maxSize.to_bytes(1, byteorder='big')  # never a value > 255
-        # TODO: WRITE current values list size
         cur_size_bytes = len(self.list).to_bytes(1, byteorder='big')  # never a value > 255
         bucket_id_bytes = self.bucketID.to_bytes(4, byteorder='big')  # max 2^32 buckets
         bucket_values_bytes: bytes = bytes()
@@ -317,21 +316,46 @@ class ExtendibleHashingIndex(object):
         """
         bucket: Union[int, Bucket] = self.bucketPointers.get(prefix, None)
         if isinstance(bucket, int):
-            # TODO: read bucket!
-            # TODO: if #bucketsInMem > maxBucketsInMem then swap one bucket
             bucket = self.read_bucket(bucket)
-        return bucket
-    
-    def set_bucket(self, prefix: str, bucket: Bucket) -> None:
-        """Store the bucket the given bucket under the given prefix.
+            bucket_wrapper.contents = bucket
+            self.set_bucket(prefix, bucket_wrapper)
+            print(f"load {bucket.bucketID}", flush=True)  # TODO delete delete delete delete delete
+            assert len(self.bucketsInMemory) <= self.bucketsMaxInMemory, f"Too many buckets in memory: {len(self.bucketsInMemory)} > {self.bucketsMaxInMemory}"
+        return bucket, bucket_wrapper
+
+    def set_bucket(self, prefix: str, bucketWrapper: BucketWrapper) -> None:
+        """Store the given bucket or bucket ID under the given prefix.
+        Evicts another bucket from memory if there is no more room in-memory.
 
         :param keyHash: The full key hash to find the bucket for
         :return: The corresponding Bucket if it exists, else None
         """
-        # TODO: if #bucketsInMem > maxBucketsInMem then evict one bucket
-        # TODO: write bucket
-        self.bucketPointers[prefix] = bucket
-        self.write_bucket(bucket)
+        wrapperContents: Union[Bucket, int] = bucketWrapper.contents
+        bucketID: int = wrapperContents if isinstance(wrapperContents, int) else wrapperContents.bucketID
+
+        # Always overwrite wrapper, is actually redundant
+        # if BucketWrapper is not new
+
+        if isinstance(wrapperContents, Bucket):
+            self.bucketsToWrapper[bucketID] = bucketWrapper
+            self.write_bucket(wrapperContents)
+            
+            bucketNotInMem: bool = wrapperContents not in self.bucketsInMemory
+            if len(self.bucketsInMemory) >= self.bucketsMaxInMemory and bucketNotInMem:
+                evicted_bucket: Bucket = self.bucketsInMemory.pop(0)
+                evicted_bucket_wrapper: BucketWrapper = self.bucketsToWrapper[evicted_bucket.bucketID]
+                self.write_bucket(evicted_bucket)   # flush bucket before in-mem eviction
+                evicted_bucket_wrapper.contents = evicted_bucket.bucketID   # Do in-mem eviction
+                print(f"evict {evicted_bucket.bucketID}   ({[b.bucketID for b in self.bucketsInMemory]})", flush=False)  # TODO delete delete delete delete delete
+    
+            if bucketNotInMem:
+                print([b.bucketID for b in self.bucketsInMemory])
+                self.bucketsInMemory.append(wrapperContents)
+            
+        else:
+            self.bucketsToWrapper[bucketID] = bucketWrapper
+
+        self.bucketPointers[prefix] = bucketWrapper
 
     def get_hash_from_key(self, key: str, hash_function: Callable=hash_function_str):
         """Transform the given key into a hash.
