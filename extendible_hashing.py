@@ -354,7 +354,6 @@ class ExtendibleHashingIndex(object):
             bucket = self.read_bucket(bucket)
             bucket_wrapper.contents = bucket
             self.set_bucket(prefix, bucket_wrapper)
-            print(f"load {bucket.bucketID}", flush=True)  # TODO delete delete delete delete delete
             assert len(self.bucketsInMemory) <= self.bucketsMaxInMemory, f"Too many buckets in memory: {len(self.bucketsInMemory)} > {self.bucketsMaxInMemory}"
         return bucket, bucket_wrapper
 
@@ -381,10 +380,8 @@ class ExtendibleHashingIndex(object):
                 evicted_bucket_wrapper: BucketWrapper = self.bucketsToWrapper[evicted_bucket.bucketID]
                 self.write_bucket(evicted_bucket)   # flush bucket before in-mem eviction
                 evicted_bucket_wrapper.contents = evicted_bucket.bucketID   # Do in-mem eviction
-                print(f"evict {evicted_bucket.bucketID}   ({[b.bucketID for b in self.bucketsInMemory]})", flush=False)  # TODO delete delete delete delete delete
-    
+
             if bucketNotInMem:
-                print([b.bucketID for b in self.bucketsInMemory])
                 self.bucketsInMemory.append(wrapperContents)
             
         else:
