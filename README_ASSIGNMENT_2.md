@@ -57,4 +57,9 @@ to our code didn't contain any errors, such as when we implemented the disk stor
 
 ### Implementation (disk storage vs memory)
 
-WIP
+Our implementation only allows to have a certain number of buckets in memory at any point in time. Because
+of that, we needed to make sure to write buckets to a file. When we do a getBucket() operation, we will
+either get the bucket directly from memory or, if the bucket isn't present in memory, load it from disk and
+replace a bucket that is in memory. Another challenge was when we did the split operation. Say x buckets
+may be present in memory. If all x places are filled and you then do a split, then 1 bucket needed to have 
+its changes written to disk, to make place for the 2nd bucket that is created in the split. 
