@@ -62,4 +62,32 @@ of that, we needed to make sure to write buckets to a file. When we do a getBuck
 either get the bucket directly from memory or, if the bucket isn't present in memory, load it from disk and
 replace a bucket that is in memory. Another challenge was when we did the split operation. Say x buckets
 may be present in memory. If all x places are filled and you then do a split, then 1 bucket needed to have 
-its changes written to disk, to make place for the 2nd bucket that is created in the split. 
+its changes written to disk, to make place for the 2nd bucket that is created in the split. \
+\
+However, a challenge we faced was that the buckets to which the pointers to buckets point, could not all be 
+saved in memory. We resolved this by having a wrapper called BucketWrapper, which holds a Union object with
+a Bucket and integer as attribute. The integer is the keyhash (which can be saved in memory) and the Bucket
+is the Bucket corresponding to the keyhash. So, the bucket pointers point to BucketWrapper objects now. If
+the content of the Union is an integer, you can conclude that the bucket isn't in memory so the first operation
+is to load it to memory. If the Union is a Bucket, then the bucket is already present in memory, so we don't 
+need to do additional operations. \
+\
+The way the data is stored 'on disk' is by assuming that each bucket has a fixed size. That is, we reserve a fixed size
+block of memory on-file for every bucket. The block contains space for: The local prefix size member, the maximum length
+of the BucketValue list, the current length of the BucketValue list and space to store the maximum amount of BucketValues.
+So if the max length of the BucketValue list is 10, but it currently contains 4 items, then the block still contains
+space for all 10 potential items. With this assumption,  we can easily calculate the offset of the bucket in the binary
+file, and we wouldn't have to parse the entire file each time.
+
+We are only able to assume that every bucket requires the same fixed amount of space, 207 bytes in out implementation,
+because we assume the BucketValue's key and value members always have a size of respectively 4B and 16B on disk. These
+numbers were calculated as follows:
+
+* key: our database in db.py makes use of a fixed size user ID value for every variable length tuple, namely 4B. The string representation of the keys in the index will thus contain 32 "binary characters" and take 4B in the index's storage file
+* value: our database in db.py makes use of a fixed size tuple address of 16B
+
+The use of these "fixed" values is more or less generalized in our index implementation. By editing the environment
+variables at the top of the [extendible_hashing.py](extendible_hashing.py) file, the changed sizes should be taken
+into account by the index. But a mismatch between the [db.py](db.py) database and the index will be created if only
+the environment variables are changed.
+
