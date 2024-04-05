@@ -1,4 +1,4 @@
-# Database systems: Exercise 2
+# Database systems: Exercise
 
 ## Group members
 
